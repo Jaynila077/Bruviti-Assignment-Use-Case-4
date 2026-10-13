@@ -8,7 +8,7 @@
 
 - The seat calendar gets built once when the app starts, not freshly on every request. Doesn't matter much at this data size, but it means the app isn't redoing the same work over and over if someone hits the API repeatedly with different dates/orgs.
 
-- Since the grading data has problems I can't see, the loader never refuses to start because of a bad row. It skips the row and logs a warning instead (details in DATA.md #10). The downside is a broken row quietly drops out of the numbers, so the warnings in the startup log are worth a look.
+- Since the grading data has problems I can't see, the loader never refuses to start because of a bad row. It skips the row and logs a warning instead. The downside is a broken row quietly drops out of the numbers, so the warnings in the startup log are worth a look.
 
 ## What I didn't do
 
