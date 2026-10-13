@@ -8,10 +8,12 @@
 
 - The seat calendar gets built once when the app starts, not freshly on every request. Doesn't matter much at this data size, but it means the app isn't redoing the same work over and over if someone hits the API repeatedly with different dates/orgs.
 
+- Since the grading data has problems I can't see, the loader never refuses to start because of a bad row. It skips the row and logs a warning instead (details in DATA.md #10). The downside is a broken row quietly drops out of the numbers, so the warnings in the startup log are worth a look.
+
 ## What I didn't do
 
-- No caching for specific queries — didn't need it, everything's already fast (under 150ms even for a 9-month, company-wide query).
-- No real logging or metrics beyond a basic "loaded X rows" line at startup, felt like overkill for a take-home.
+- No caching for specific queries. Didn't need it, everything's well under a second even for a company-wide query over a long window.
+- No real logging or metrics, just the "loaded X rows" lines at startup, plus a warning for any bad row the loader skips. Felt like overkill to do more for a take-home.
 - The UI is deliberately very simple, a form, a summary, a table. It's there to show the API works, not to look like a finished product.
 
 ## What I'd do with more time

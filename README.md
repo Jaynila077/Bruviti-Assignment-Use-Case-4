@@ -8,11 +8,25 @@ five raw CSV exports.
 
 Requires Python 3.10+.
 
+One command (Mac/Linux), run from the repo root:
+
+```bash
+python3 -m venv venv && . venv/bin/activate && pip install -r requirements.txt && uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
+
+On Windows (PowerShell):
+
+```powershell
+python -m venv venv; venv\Scripts\activate; pip install -r requirements.txt; uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
+
+Or step by step:
+
 ```bash
 python3 -m venv venv
 source venv/bin/activate        # Windows: venv\Scripts\activate
 pip install -r requirements.txt
-uvicorn app.main:app --port 8000
+uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
 The service is ready once the terminal shows `Application startup complete.` and
@@ -20,7 +34,7 @@ The service is ready once the terminal shows `Application startup complete.` and
 
 The service reads CSVs from the `data/` folder at the repository root at startup. To run
 against a different export, replace the contents of `data/` (same five filenames, same
-columns) before starting the service — nothing else needs to change.
+columns) before starting the service. Nothing else needs to change.
 
 ## Use it
 
@@ -40,23 +54,25 @@ columns) before starting the service — nothing else needs to change.
 pytest tests/ -v
 ```
 
-Tests run fully offline against in-memory fixtures (no dependency on the real `data/` folder
-or network access), and include the worked example from Appendix P as an exact-match
-regression test.
+Tests run fully offline against in-memory fixtures and temp folders (no dependency on the
+real `data/` folder or network access), and include the worked example from Appendix P as an
+exact-match regression test.
 
 ## Project layout
 
 ```
 app/
   main.py           FastAPI app, routes, startup, error handling
-  data_loader.py    CSV -> typed records
+  data_loader.py    CSV -> typed records (bad rows skipped with a warning)
   org_tree.py       org-unit subtree resolution
   seat_calendar.py  per-(user, tool) held-day interval math
   metrics.py        the metric definitions from Appendix P
   templates/        the single UI page
 data/               the five input CSVs (swapped at grading time)
+                    and eda_data.ipynb, the exploration behind DATA.md
 tests/              pytest suite, one file per module
 ```
+
 
 See `DATA.md` for data issues found and how they're handled, `NOTES.md` for scope decisions,
 and `AI.md` for AI tool usage.
