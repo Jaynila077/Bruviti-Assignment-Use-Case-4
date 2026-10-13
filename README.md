@@ -65,7 +65,7 @@ app/
   main.py           FastAPI app, routes, startup, error handling
   data_loader.py    CSV -> typed records (bad rows skipped with a warning)
   org_tree.py       org-unit subtree resolution
-  seat_calendar.py  per-(user, tool) held-day interval math
+  seat_calendar.py  per-(user, tool) interval math
   metrics.py        the metric definitions from Appendix P
   templates/        the single UI page
 data/               the five input CSVs (swapped at grading time)
