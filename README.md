@@ -68,8 +68,10 @@ app/
   seat_calendar.py  per-(user, tool) interval math
   metrics.py        the metric definitions from Appendix P
   templates/        the single UI page
+
 data/               the five input CSVs (swapped at grading time)
                     and eda_data.ipynb, the exploration behind DATA.md
+                    
 tests/              pytest suite, one file per module
 ```
 
