@@ -1,4 +1,5 @@
 import pytest
+import logging
 from app.org_tree import OrgTree
 from app.data_loader import OrgUnit, Person
 
@@ -32,12 +33,27 @@ def test_resolve_subtree(org_data):
     assert tree.resolve_subtree("MISSING") == set()
 
 def test_cycle_detection(org_data):
+    # Introduce a cycle
     org_data.append(OrgUnit("CYCLE_A", "A", "CYCLE_B", "1"))
     org_data.append(OrgUnit("CYCLE_B", "B", "CYCLE_A", "2"))
     tree = OrgTree(org_data)
     
-    with pytest.raises(ValueError, match="Cycle detected"):
-        tree.resolve_subtree("CYCLE_A")
+    # Should resolve gracefully using visited set without looping or raising exceptions
+    res = tree.resolve_subtree("CYCLE_A")
+    assert res == {"CYCLE_A", "CYCLE_B"}
+
+def test_duplicate_org_units_skipped_and_logged(caplog):
+    org_data = [
+        OrgUnit("L1", "Root", "", "1"),
+        OrgUnit("L1", "Duplicate Root", "", "1"), # Duplicate ID
+    ]
+    with caplog.at_level(logging.WARNING):
+        tree = OrgTree(org_data)
+        
+        # Warning logged
+        assert "Duplicate org_unit_id 'L1'" in caplog.text
+        # First entry kept
+        assert tree.id_to_org["L1"].name == "Root"
 
 def test_users_in_org(org_data, people_data):
     tree = OrgTree(org_data)

@@ -58,6 +58,9 @@ def test_validate_window():
         
     with pytest.raises(ValueError, match="Invalid date format"):
         validate_window("07-01-2026", "2026-07-30")
+        
+    with pytest.raises(ValueError, match="Invalid date format"):
+        validate_window("2026-07-01", "") # Test empty string rejection via strict parsing
 
 def test_summary_worked_example(people, seats, events, org_tree, price_list, seat_calendar):
     summary = compute_summary(people, seats, events, org_tree, price_list, 
@@ -131,13 +134,6 @@ def test_overlapping_seats_spend(people, org_tree):
     ]
     
     sc = SeatCalendar(overlap_seats, people)
-    
-    # Range is Jan 1 to Jan 20 fully unioned = 20 total distinct days.
-    # Pricing:
-    # - Jan 1-9 (9 days): only 'pro' applies -> 9 * 1.0 = 9.0
-    # - Jan 10-15 (6 days): both apply, logic takes max active price ('pro') -> 6 * 1.0 = 6.0
-    # - Jan 16-20 (5 days): only 'std' applies -> 5 * 0.5 = 2.5
-    # Expected Spend = 9.0 + 6.0 + 2.5 = 17.5
     
     summary = compute_summary(people, overlap_seats, [], org_tree, overlap_prices, 
                               date(2026, 1, 1), date(2026, 1, 31), seat_calendar=sc)
