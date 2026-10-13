@@ -1,5 +1,8 @@
+import logging
 from typing import Dict, List, Set, Optional
 from app.data_loader import OrgUnit, Person
+
+logger = logging.getLogger(__name__)
 
 class OrgTree:
     def __init__(self, org_units: List[OrgUnit]):
@@ -7,6 +10,10 @@ class OrgTree:
         self.parent_to_children: Dict[str, List[str]] = {}
         
         for unit in org_units:
+            if unit.org_unit_id in self.id_to_org:
+                logger.warning(f"Duplicate org_unit_id '{unit.org_unit_id}' found. Keeping the first.")
+                continue
+                
             self.id_to_org[unit.org_unit_id] = unit
             if unit.parent_id not in self.parent_to_children:
                 self.parent_to_children[unit.parent_id] = []
@@ -25,10 +32,9 @@ class OrgTree:
         while stack:
             curr = stack.pop()
             if curr in result:
-                raise ValueError(f"Cycle detected in org tree involving org_unit_id: {curr}")
+                continue
                 
             result.add(curr)
-            # Add all children of the current node to the stack
             children = self.parent_to_children.get(curr, [])
             stack.extend(children)
             

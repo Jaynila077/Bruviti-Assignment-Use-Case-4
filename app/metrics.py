@@ -2,7 +2,7 @@ from datetime import date, datetime, timedelta
 from typing import Dict, List, Optional, Tuple, Set
 from collections import defaultdict
 
-from app.data_loader import Person, Seat, ActivityEvent, Price
+from app.data_loader import Person, Seat, ActivityEvent, Price, _parse_date
 from app.org_tree import OrgTree
 from app.seat_calendar import SeatCalendar
 
@@ -14,8 +14,10 @@ def validate_window(from_str: str, to_str: str) -> Tuple[date, date]:
     Raises ValueError to be caught by the API layer for 4xx responses.
     """
     try:
-        start_date = datetime.strptime(from_str, "%Y-%m-%d").date()
-        end_date = datetime.strptime(to_str, "%Y-%m-%d").date()
+        start_date = _parse_date(from_str)
+        end_date = _parse_date(to_str)
+        if not start_date or not end_date:
+            raise ValueError("Dates cannot be empty")
     except ValueError as e:
         raise ValueError(f"Invalid date format, expected YYYY-MM-DD: {e}")
         
@@ -26,10 +28,6 @@ def validate_window(from_str: str, to_str: str) -> Tuple[date, date]:
 
 def _get_qualifying_events(events: List[ActivityEvent], scope: Set[str], 
                            seat_calendar: SeatCalendar, win_start: date, win_end: date) -> Set[Tuple[str, str]]:
-    """
-    Returns a set of (user_id, tool) pairs that had at least one valid usage 
-    event in the window while actively holding a seat for that tool.
-    """
     qualifying = set()
     for event in events:
         if event.user_id in scope:
@@ -58,7 +56,6 @@ def compute_summary(people: Dict[str, Person], seats: List[Seat], events: List[A
     
     price_map = {(p.tool, p.tier): p.monthly_price_usd for p in price_list if p.monthly_price_usd is not None}
     
-    # Filter seats to just those in scope, grouped by (user, tool)
     scope_seats = defaultdict(list)
     for seat in seats:
         if seat.user_id in scope:
@@ -67,7 +64,6 @@ def compute_summary(people: Dict[str, Person], seats: List[Seat], events: List[A
     spend = 0.0
     idle_spend = 0.0
     
-    # Price by iterating through the deduped unioned calendar days
     for (u, t), seat_list in scope_seats.items():
         intervals = seat_calendar.held_intervals.get((u, t), [])
         for start_date, end_date in intervals:
@@ -77,13 +73,11 @@ def compute_summary(people: Dict[str, Person], seats: List[Seat], events: List[A
             day = i_start
             while day <= i_end:
                 day_price = None
-                # Evaluate whichever seat tier(s) apply to this specific day
                 for seat in seat_list:
                     s_end = (seat.revoked_on - timedelta(days=1)) if seat.revoked_on else date.max
                     if seat.granted_on <= day <= s_end:
                         price = price_map.get((seat.tool, seat.tier))
                         if price is not None:
-                            # If overlapping rows, safely take the highest price that was active
                             if day_price is None or price > day_price:
                                 day_price = price
                 
