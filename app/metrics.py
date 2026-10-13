@@ -1,9 +1,12 @@
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Dict, List, Optional, Tuple, Set
+from collections import defaultdict
 
 from app.data_loader import Person, Seat, ActivityEvent, Price
 from app.org_tree import OrgTree
 from app.seat_calendar import SeatCalendar
+
+CANONICAL_TOOLS = ["A", "B", "C", "D", "E"]
 
 def validate_window(from_str: str, to_str: str) -> Tuple[date, date]:
     """
@@ -20,24 +23,6 @@ def validate_window(from_str: str, to_str: str) -> Tuple[date, date]:
         raise ValueError("from date cannot be after to date")
         
     return start_date, end_date
-
-def _get_seat_days(seat: Seat, win_start: date, win_end: date) -> int:
-    """
-    Computes the exact number of held days for a *specific seat row* inside the window.
-    """
-    start = max(seat.granted_on, win_start)
-    
-    if seat.revoked_on:
-        from datetime import timedelta
-        end_seat = seat.revoked_on - timedelta(days=1)
-        # Handle case where it was revoked on/before the day it was granted
-        if end_seat < seat.granted_on:
-            return 0
-    else:
-        end_seat = date.max
-        
-    end = min(end_seat, win_end)
-    return max(0, (end - start).days + 1)
 
 def _get_qualifying_events(events: List[ActivityEvent], scope: Set[str], 
                            seat_calendar: SeatCalendar, win_start: date, win_end: date) -> Set[Tuple[str, str]]:
@@ -56,10 +41,13 @@ def _get_qualifying_events(events: List[ActivityEvent], scope: Set[str],
 
 def compute_summary(people: Dict[str, Person], seats: List[Seat], events: List[ActivityEvent], 
                     org_tree: OrgTree, price_list: List[Price], 
-                    window_start: date, window_end: date, org_unit_id: Optional[str] = None) -> dict:
+                    window_start: date, window_end: date, 
+                    org_unit_id: Optional[str] = None,
+                    seat_calendar: Optional[SeatCalendar] = None) -> dict:
     
     scope = org_tree.users_in_org(org_unit_id, people)
-    seat_calendar = SeatCalendar(seats, people)
+    if seat_calendar is None:
+        seat_calendar = SeatCalendar(seats, people)
     
     licensed_users = len(seat_calendar.licensed_users_in_window(scope, window_start, window_end))
     
@@ -70,21 +58,42 @@ def compute_summary(people: Dict[str, Person], seats: List[Seat], events: List[A
     
     price_map = {(p.tool, p.tier): p.monthly_price_usd for p in price_list if p.monthly_price_usd is not None}
     
+    # Filter seats to just those in scope, grouped by (user, tool)
+    scope_seats = defaultdict(list)
+    for seat in seats:
+        if seat.user_id in scope:
+            scope_seats[(seat.user_id, seat.tool)].append(seat)
+
     spend = 0.0
     idle_spend = 0.0
     
-    for seat in seats:
-        if seat.user_id in scope:
-            days = _get_seat_days(seat, window_start, window_end)
-            if days > 0:
-                price = price_map.get((seat.tool, seat.tier))
-                if price is not None:
-                    seat_cost = days * (price / 30.0)
-                    spend += seat_cost
-                    # If this (user, tool) pair had 0 qualifying events across the whole window, 
-                    # the entire cost of this seat is idle.
-                    if (seat.user_id, seat.tool) not in qualifying_events:
-                        idle_spend += seat_cost
+    # Price by iterating through the deduped unioned calendar days
+    for (u, t), seat_list in scope_seats.items():
+        intervals = seat_calendar.held_intervals.get((u, t), [])
+        for start_date, end_date in intervals:
+            i_start = max(window_start, start_date)
+            i_end = min(window_end, end_date)
+            
+            day = i_start
+            while day <= i_end:
+                day_price = None
+                # Evaluate whichever seat tier(s) apply to this specific day
+                for seat in seat_list:
+                    s_end = (seat.revoked_on - timedelta(days=1)) if seat.revoked_on else date.max
+                    if seat.granted_on <= day <= s_end:
+                        price = price_map.get((seat.tool, seat.tier))
+                        if price is not None:
+                            # If overlapping rows, safely take the highest price that was active
+                            if day_price is None or price > day_price:
+                                day_price = price
+                
+                if day_price is not None:
+                    cost = day_price / 30.0
+                    spend += cost
+                    if (u, t) not in qualifying_events:
+                        idle_spend += cost
+                
+                day += timedelta(days=1)
                         
     return {
         "licensed_users": licensed_users,
@@ -96,20 +105,19 @@ def compute_summary(people: Dict[str, Person], seats: List[Seat], events: List[A
 
 def compute_tools(people: Dict[str, Person], seats: List[Seat], events: List[ActivityEvent], 
                   org_tree: OrgTree, price_list: List[Price], 
-                  window_start: date, window_end: date, org_unit_id: Optional[str] = None) -> List[dict]:
+                  window_start: date, window_end: date, 
+                  org_unit_id: Optional[str] = None,
+                  seat_calendar: Optional[SeatCalendar] = None) -> List[dict]:
     
     scope = org_tree.users_in_org(org_unit_id, people)
-    seat_calendar = SeatCalendar(seats, people)
+    if seat_calendar is None:
+        seat_calendar = SeatCalendar(seats, people)
     
     qualifying_events = _get_qualifying_events(events, scope, seat_calendar, window_start, window_end)
-    
-    # Discover all tools and order alphabetically (e.g. A through E)
-    all_tools = sorted(list(set([s.tool for s in seats] + [p.tool for p in price_list])))
     price_map = {(p.tool, p.tier): p.monthly_price_usd for p in price_list}
     
     results = []
-    for tool in all_tools:
-        # A tool is priced if at least one tier for this tool has a non-null price in price_list
+    for tool in CANONICAL_TOOLS:
         is_tool_priced = any(price is not None for (t, tier), price in price_map.items() if t == tool)
         
         tool_licensed_users = len(seat_calendar.licensed_users_in_window(scope, window_start, window_end, tool=tool))
@@ -130,16 +138,35 @@ def compute_tools(people: Dict[str, Person], seats: List[Seat], events: List[Act
             tool_spend = 0.0
             tool_idle = 0.0
             
+            tool_users_seats = defaultdict(list)
             for seat in seats:
                 if seat.tool == tool and seat.user_id in scope:
-                    days = _get_seat_days(seat, window_start, window_end)
-                    if days > 0:
-                        price = price_map.get((seat.tool, seat.tier))
-                        if price is not None:
-                            seat_cost = days * (price / 30.0)
-                            tool_spend += seat_cost
-                            if (seat.user_id, seat.tool) not in qualifying_events:
-                                tool_idle += seat_cost
+                    tool_users_seats[seat.user_id].append(seat)
+                    
+            for u, seat_list in tool_users_seats.items():
+                intervals = seat_calendar.held_intervals.get((u, tool), [])
+                for start_date, end_date in intervals:
+                    i_start = max(window_start, start_date)
+                    i_end = min(window_end, end_date)
+                    
+                    day = i_start
+                    while day <= i_end:
+                        day_price = None
+                        for seat in seat_list:
+                            s_end = (seat.revoked_on - timedelta(days=1)) if seat.revoked_on else date.max
+                            if seat.granted_on <= day <= s_end:
+                                price = price_map.get((tool, seat.tier))
+                                if price is not None:
+                                    if day_price is None or price > day_price:
+                                        day_price = price
+                                        
+                        if day_price is not None:
+                            cost = day_price / 30.0
+                            tool_spend += cost
+                            if (u, tool) not in qualifying_events:
+                                tool_idle += cost
+                                
+                        day += timedelta(days=1)
             
             cpa = round(tool_spend / tool_active_users, 2) if tool_active_users > 0 else None
             
