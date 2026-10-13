@@ -53,4 +53,4 @@ All five files use Windows-style `\r\n` line endings. This is invisible if you u
 
 ---
 
-**How these were found:** by direct inspection of the CSVs (null counts, group-bys, set differences between files, raw byte inspection for line endings), not by guessing from the brief alone, see `notebooks/eda_data.ipynb` for the checks and their actual output against this sample.
+**How these were found:** by direct inspection of the CSVs (null counts, group-bys, set differences between files, raw byte inspection for line endings), not by guessing from the brief alone, see `data/eda_data.ipynb` for the checks and their actual output against this sample.

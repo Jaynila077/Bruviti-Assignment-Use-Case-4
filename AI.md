@@ -5,7 +5,7 @@
 - **Gemini**: primary code generator. I described each endpoint/module against the spec
   in the brief and Gemini wrote the implementation (FastAPI routes, data loading, the
   seat-calendar/held-day logic, metrics.py, tests). I also used it to help build the EDA
-  notebook (`notebooks/eda_data.ipynb`).
+  notebook (`data/eda_data.ipynb`).
 - **Claude**: acted as reviewer and orchestrator, not code generator. Concretely:
   - Wrote the exact prompts I fed to Gemini for each piece of the build.
   - Reviewed every chunk of Gemini-generated code against the metric definitions in
